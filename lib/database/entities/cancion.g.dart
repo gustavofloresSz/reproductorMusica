@@ -76,11 +76,12 @@ Cancion _cancionDeserialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  final object = Cancion();
-  object.artista = reader.readString(offsets[0]);
-  object.filePath = reader.readString(offsets[1]);
+  final object = Cancion(
+    artista: reader.readString(offsets[0]),
+    filePath: reader.readString(offsets[1]),
+    titulo: reader.readString(offsets[2]),
+  );
   object.id = id;
-  object.titulo = reader.readString(offsets[2]);
   return object;
 }
 

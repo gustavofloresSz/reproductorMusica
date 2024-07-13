@@ -6,7 +6,10 @@ part 'cancion.g.dart';
 class Cancion {
   Id id = Isar.autoIncrement;
 
-  late String titulo;
-  late String artista;
-  late String filePath;
+  final String titulo;
+  final String artista;
+  final String filePath;
+
+  Cancion({required this.titulo, required this.artista, required this.filePath});
 }
+
