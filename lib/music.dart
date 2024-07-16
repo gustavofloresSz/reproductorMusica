@@ -3,6 +3,7 @@ class Music {
   final String titulo;
   final String artista;
   final String filePath;
+  final String a='2';
 
   Music({
     required this.titulo,
