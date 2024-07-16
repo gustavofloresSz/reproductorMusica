@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:reproductor_flutter/database/entities/cancion.dart';
 import 'package:reproductor_flutter/database/isar.dart';
-import 'package:reproductor_flutter/music.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:reproductor_flutter/screen/window_reproducir.dart';
 
@@ -13,7 +11,7 @@ class MusicListScreen extends StatefulWidget {
 
 class _MusicListScreenState extends State<MusicListScreen> {
   final isardb = IsarDatasource();
-  List<Music> _playlist = [];
+  List<Cancion> _playlist = [];
   int _selectedIndex = 0;
 
   Future<void> _seleccionarCanciones() async {
@@ -24,21 +22,29 @@ class _MusicListScreenState extends State<MusicListScreen> {
 
     if (result != null) {
       setState(() {
-        List<Music> nuevasCanciones = result.paths.map((path) {
-          return Music(
+        List<Cancion> nuevasCanciones = result.paths.map((path) {
+          return Cancion(
             titulo: path?.split('/').last ?? 'Desconocido',
             artista: 'Desconocido',
             filePath: path ?? '',
           );
         }).toList();
 
-        _playlist.addAll(nuevasCanciones);
         for (var elemento in nuevasCanciones) {
-          final cancion = Cancion(
+          if (!esDuplicado(elemento)) {
+            final cancion = Cancion(
               titulo: elemento.titulo,
               artista: elemento.artista,
-              filePath: elemento.filePath);
-          isardb.saveSong(cancion);
+              filePath: elemento.filePath,
+            );
+            isardb.saveSong(cancion);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Canción duplicada: ${elemento.titulo}'),
+              ),
+            );
+          }
         }
       });
     }
@@ -48,6 +54,10 @@ class _MusicListScreenState extends State<MusicListScreen> {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  bool esDuplicado(Cancion nuevaCancion) {
+    return _playlist.any((cancion) => cancion.titulo == nuevaCancion.titulo);
   }
 
   @override
@@ -95,7 +105,7 @@ class _MusicListScreenState extends State<MusicListScreen> {
           ),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.black,
+        selectedItemColor: Colors.yellow,
         onTap: _onItemTapped,
       ),
     );
@@ -107,13 +117,15 @@ class _MusicListScreenState extends State<MusicListScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());
-          } if (snapshot.hasError) {
+          }
+          if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
-          } if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('No data available'));
-          } 
-          _playlist=[...snapshot.data!.map((elemento){
-            return Music(artista:elemento.artista, filePath: elemento.filePath,titulo: elemento.titulo);
+          }
+          _playlist = [...snapshot.data!.map((elemento) {
+            return Cancion(artista: elemento.artista, filePath: elemento.filePath, titulo: elemento.titulo);
           })];
           return ListView.builder(
             itemCount: _playlist.length,

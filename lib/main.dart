@@ -13,9 +13,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false, //quitar etiqueta 
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        brightness: Brightness.dark,
       ),
-      home:  MusicListScreen(),
+      home:  MusicListScreen(), //llama a la vista de lista
     );
   }
 }

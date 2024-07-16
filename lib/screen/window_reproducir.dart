@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:reproductor_flutter/music.dart';
+import 'package:reproductor_flutter/database/entities/cancion.dart';
 import 'package:reproductor_flutter/audio.dart';
 
 class MusicPlayerScreen extends StatefulWidget {
-  final List<Music> playlist;
+  final List<Cancion> playlist;
   final int indiceInicial;
 
   const MusicPlayerScreen({required this.playlist,
@@ -16,15 +16,15 @@ class MusicPlayerScreen extends StatefulWidget {
 
 class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   late AudioPlayer reproductor;
-  late Music cancionActual;
-  late List<Music> _playlist;
+  late Cancion cancionActual;
+  late List<Cancion> _playlist;
   late AudioManager adminAudio;
 
   @override
   void initState() {
     super.initState();
     adminAudio = AudioManager();
-    _playlist = widget.playlist;
+    _playlist = widget.playlist.cast<Cancion>();
     cancionActual = _playlist[widget.indiceInicial];
 
     reproductor = adminAudio.reproductor;
