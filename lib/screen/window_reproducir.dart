@@ -1,34 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:reproductor_flutter/Controllers/audio_controller.dart';
 import 'package:reproductor_flutter/database/entities/cancion.dart';
-import 'package:reproductor_flutter/audio.dart';
 
 class MusicPlayerScreen extends StatefulWidget {
   final List<Cancion> playlist;
   final int indiceInicial;
 
-  const MusicPlayerScreen({required this.playlist,
-                           required this.indiceInicial, Key? key}) : super(key: key);
+  const MusicPlayerScreen({
+    required this.playlist,
+    required this.indiceInicial,
+    Key? key}) : super(key: key);
 
   @override
   _MusicPlayerScreenState createState() => _MusicPlayerScreenState();
 }
 
 class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
-  late AudioPlayer reproductor;
-  late Cancion cancionActual;
-  late List<Cancion> _playlist;
-  late AudioManager adminAudio;
+  late AudioController adminAudio;
 
   @override
   void initState() {
     super.initState();
-    adminAudio = AudioManager();
-    _playlist = widget.playlist.cast<Cancion>();
-    cancionActual = _playlist[widget.indiceInicial];
+    adminAudio = AudioController();
+    adminAudio.setPlaylist(widget.playlist, widget.indiceInicial);
 
-    reproductor = adminAudio.reproductor;
-    reproductor.onDurationChanged.listen((d) {
+    adminAudio.reproductor.onDurationChanged.listen((d) {
       if (mounted) {
         setState(() {
           adminAudio.updateDuration(d);
@@ -36,7 +32,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       }
     });
 
-    reproductor.onPositionChanged.listen((p) {
+    adminAudio.reproductor.onPositionChanged.listen((p) {
       if (mounted) {
         setState(() {
           adminAudio.updatePosition(p);
@@ -44,75 +40,50 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       }
     });
 
-    _playSong(); //inicia la reproducción de la canción al entrar en la vista
-  }
-
-  void _playSong() async {
-    await reproductor.setSource(DeviceFileSource(cancionActual.filePath));
-    await reproductor.resume();
-    setState(() {
-      adminAudio.updatePlayingStatus(true);
+    adminAudio.reproductor.onPlayerComplete.listen((event) {
     });
-  }
-
-  void _playPause() {
-    if (adminAudio.isPlaying) {
-      reproductor.pause();
-    } else {
-      reproductor.resume();
-    }
-
-    setState(() {
-      adminAudio.updatePlayingStatus(!adminAudio.isPlaying);
-    });
-  }
-
-  void _nextSong() {
-    setState(() {
-      int indiceActual = _playlist.indexOf(cancionActual);
-      cancionActual = _playlist[(indiceActual + 1) % _playlist.length];
-      _playSong();
-    });
-  }
-
-  void _previousSong() {
-    setState(() {
-      int indiceActual = _playlist.indexOf(cancionActual);
-      cancionActual = _playlist[(indiceActual - 1 + _playlist.length) % _playlist.length];
-      _playSong();
-    });
+    adminAudio.playSong();
   }
 
   @override
   void dispose() {
-    // No llames a reproductor.dispose(), para que siga reproduciendo en segundo plano
     super.dispose();
+    //adminAudio.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reproductor de Música GFS'),
+        title: const Text('Reproductor de Musica GFS'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              cancionActual.titulo,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              cancionActual.artista,
-              style: const TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            const SizedBox(height: 32),
-            CircleAvatar(
-              radius: 80,
-              child: Icon(Icons.music_note, size: 80), // Icono de música
+            ValueListenableBuilder<Cancion>(
+              valueListenable: adminAudio.currentSongNotifier,
+              builder: (context, cancion, _) {
+                return Column(
+                  children: [
+                    Text(
+                      cancion.titulo,
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      cancion.artista,
+                      style: const TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 32),
+                    CircleAvatar(
+                      radius: 80,
+                      child: Icon(Icons.music_note, size: 80),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 32),
             Row(
@@ -121,28 +92,47 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                 IconButton(
                   icon: const Icon(Icons.skip_previous),
                   iconSize: 48,
-                  onPressed: _previousSong,
+                  onPressed: () {
+                    setState(() {
+                      adminAudio.previousSong();
+                    });
+                  },
                 ),
-                IconButton(
-                  icon: Icon(adminAudio.isPlaying ? Icons.pause : Icons.play_arrow),
-                  iconSize: 64,
-                  onPressed: _playPause,
+                ValueListenableBuilder<bool>(
+                  valueListenable: adminAudio.isPlayingNotifier,
+                  builder: (context, isPlaying, _) {
+                    return IconButton(
+                      icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                      iconSize: 64,
+                      onPressed: () {
+                        setState(() {
+                          adminAudio.playPause();
+                        });
+                      },
+                    );
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.skip_next),
                   iconSize: 48,
-                  onPressed: _nextSong,
+                  onPressed: () {
+                    setState(() {
+                      adminAudio.nextSong();
+                    });
+                  },
                 ),
               ],
             ),
             const SizedBox(height: 16),
             Slider(
-              value: adminAudio.position.inSeconds.toDouble(),
+              value: adminAudio.position.inSeconds.toDouble().clamp(0.0, adminAudio.duration.inSeconds.toDouble()),
               max: adminAudio.duration.inSeconds > 0 ? adminAudio.duration.inSeconds.toDouble() : 1.0,
               onChanged: (value) {
-                setState(() {
-                  reproductor.seek(Duration(seconds: value.toInt()));
-                });
+                if (mounted) {
+                  setState(() {
+                    adminAudio.seek(Duration(seconds: value.toInt()));
+                  });
+                }
               },
             ),
             const SizedBox(height: 16),

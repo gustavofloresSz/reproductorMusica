@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
       ),
-      home:  MusicListScreen(), //llama a la vista de lista
+      home:  MusicListScreen(), //llama a la vista de lista(la inicial)
     );
   }
 }

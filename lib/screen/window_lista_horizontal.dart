@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:reproductor_flutter/database/entities/cancion.dart';
-import 'package:reproductor_flutter/database/isar.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:reproductor_flutter/screen/window_reproducir.dart';
+import 'package:reproductor_flutter/Controllers/w_lista_horizontal_controller.dart';
+import 'package:reproductor_flutter/Controllers/audio_controller.dart';
 
 class MusicListScreen extends StatefulWidget {
   @override
@@ -10,54 +10,35 @@ class MusicListScreen extends StatefulWidget {
 }
 
 class _MusicListScreenState extends State<MusicListScreen> {
-  final isardb = IsarDatasource();
+  final MusicListController musicController = MusicListController();
+  final AudioController audioController = AudioController();
   List<Cancion> _playlist = [];
-  int _selectedIndex = 0;
-
-  Future<void> _seleccionarCanciones() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-      allowMultiple: true,
-    );
-
-    if (result != null) {
-      setState(() {
-        List<Cancion> nuevasCanciones = result.paths.map((path) {
-          return Cancion(
-            titulo: path?.split('/').last ?? 'Desconocido',
-            artista: 'Desconocido',
-            filePath: path ?? '',
-          );
-        }).toList();
-
-        for (var elemento in nuevasCanciones) {
-          if (!esDuplicado(elemento)) {
-            final cancion = Cancion(
-              titulo: elemento.titulo,
-              artista: elemento.artista,
-              filePath: elemento.filePath,
-            );
-            isardb.saveSong(cancion);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Canción duplicada: ${elemento.titulo}'),
-              ),
-            );
-          }
-        }
-      });
-    }
-  }
+  int indiceSelecionado = 0;
+  int? indiceReproduccionActual;
 
   void _onItemTapped(int index) {
     setState(() {
-      _selectedIndex = index;
+      indiceSelecionado = index;
     });
   }
 
-  bool esDuplicado(Cancion nuevaCancion) {
-    return _playlist.any((cancion) => cancion.titulo == nuevaCancion.titulo);
+  @override
+  void initState() {
+    super.initState();
+    _loadSongs();
+
+    audioController.currentSongNotifier.addListener(() {
+      setState(() {
+        indiceReproduccionActual = _playlist.indexWhere((cancion) => cancion.filePath == audioController.currentSongNotifier.value.filePath);
+      });
+    });
+  }
+
+  void _loadSongs() async {
+    List<Cancion> songs = await musicController.loadSongs();
+    setState(() {
+      _playlist = songs;
+    });
   }
 
   @override
@@ -68,12 +49,12 @@ class _MusicListScreenState extends State<MusicListScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.add),
-            onPressed: _seleccionarCanciones,
+            onPressed: () => musicController.seleccionarCanciones(context, _loadSongs),
           ),
         ],
       ),
       body: IndexedStack(
-        index: _selectedIndex,
+        index: indiceSelecionado,
         children: <Widget>[
           _buildMusicList(),
           _buildFavorites(),
@@ -104,7 +85,7 @@ class _MusicListScreenState extends State<MusicListScreen> {
             label: 'Playlists',
           ),
         ],
-        currentIndex: _selectedIndex,
+        currentIndex: indiceSelecionado,
         selectedItemColor: Colors.yellow,
         onTap: _onItemTapped,
       ),
@@ -112,51 +93,120 @@ class _MusicListScreenState extends State<MusicListScreen> {
   }
 
   Widget _buildMusicList() {
-    return FutureBuilder(
-        future: isardb.loadsongs(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('No data available'));
-          }
-          _playlist = [...snapshot.data!.map((elemento) {
-            return Cancion(artista: elemento.artista, filePath: elemento.filePath, titulo: elemento.titulo);
-          })];
-          return ListView.builder(
-            itemCount: _playlist.length,
-            itemBuilder: (context, index) {
-              final cancion = _playlist[index];
-              return ListTile(
-                title: Text(cancion.titulo),
-                subtitle: Text(cancion.artista),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => MusicPlayerScreen(
-                        playlist: _playlist,
-                        indiceInicial: index,
+  return Column(
+    children: [
+      Expanded(
+        child: ListView.builder(
+          itemCount: _playlist.length,
+          itemBuilder: (context, index) {
+            final cancion = _playlist[index];
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0), // Espacio vertical entre canciones
+              child: Container(
+                decoration: BoxDecoration(
+                  border: indiceReproduccionActual == index
+                      ? Border.all(color: Colors.blue, width: 2)
+                      : null,
+                ),
+                child: ListTile(
+                  leading: Image.asset(
+                    'assets/img/logoSong2.png', // Ruta de la imagen
+                    width: 45, // Ancho de la imagen
+                    height: 45, // Altura de la imagen
+                    fit: BoxFit.cover, // Ajusta la imagen
+                  ),
+                  title: Text(cancion.titulo),
+                  //subtitle: Text(cancion.artista),
+                  onTap: () {
+                    audioController.setPlaylist(_playlist, index);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MusicPlayerScreen(
+                          playlist: _playlist,
+                          indiceInicial: index,
+                        ),
                       ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      ValueListenableBuilder<Cancion>(
+        valueListenable: audioController.currentSongNotifier,
+        builder: (context, cancion, _) {
+          return cancion.filePath.isNotEmpty
+              ? GestureDetector(
+                  onTap: () {
+                    int currentIndex = _playlist.indexWhere((element) => element.filePath == cancion.filePath);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MusicPlayerScreen(
+                          playlist: _playlist,
+                          indiceInicial: currentIndex,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(cancion.titulo, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.yellow)),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              color: Colors.yellow,
+                              icon: const Icon(Icons.skip_previous),
+                              onPressed: () {
+                                audioController.previousSong();
+                              },
+                            ),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: audioController.isPlayingNotifier,
+                              builder: (context, isPlaying, _) {
+                                return IconButton(
+                                  color: Colors.yellow,
+                                  icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                                  onPressed: () {
+                                    audioController.playPause();
+                                  },
+                                );
+                              },
+                            ),
+                            IconButton(
+                              color: Colors.yellow,
+                              icon: Icon(Icons.skip_next),
+                              onPressed: () {
+                                audioController.nextSong();
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  );
-                },
-              );
-            },
-          );
-        });
-  }
+                  ),
+                )
+              : Container();
+        },
+      ),
+    ],
+  );
+}
+
 
   Widget _buildFavorites() {
     return Center(
       child: Text('Favoritos FALTA AGREGAR'),
     );
   }
-
   Widget _buildPlaylists() {
     return Center(
       child: Text('Playlists FALTA AGREGAR'),

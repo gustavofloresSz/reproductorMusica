@@ -22,7 +22,7 @@ class IsarDatasource {
     isar.writeTxnSync(() => isar.cancions.putSync(cancion));
   }
 
-  Future<List<Cancion>> loadsongs() async {
+  Future<List<Cancion>> loadsongsBD() async {
     final isar = await db;
     // load
     return isar.cancions.where().findAll();
